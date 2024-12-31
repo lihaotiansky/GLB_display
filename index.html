@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>three.js - Texture + Gold Metal</title>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+    />
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      button {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+      }
+      #qrcodeContainer {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+      }
+      #qrcode {
+        display: block;
+        margin: 0 auto;
+      }
+      #closeQrCode {
+        display: block;
+        margin: 0 auto 10px;
+        padding: 2.5px 5px;
+        background: #333;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./js/three.module.js",
+          "three/addons/": "./js/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+      import Stats from "three/addons/libs/stats.module.js";
+
+      let container, camera, scene, renderer, stats;
+      let model, modelGroup;
+      const originalMaterials = new Map();
+
+      // 模式：仅纹理 或 无纹理
+      const renderModes = {
+        Texture: "texture",
+        NoTexture: "noTexture",
+      };
+      let currentMode = renderModes.Texture;
+
+      init();
+      animate();
+
+      function init() {
+        container = document.createElement("div");
+        document.body.appendChild(container);
+
+        camera = new THREE.PerspectiveCamera(
+          45,
+          window.innerWidth / window.innerHeight,
+          0.25,
+          100
+        );
+        camera.position.set(0, 3, 8);
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xd3d3d3); // 浅灰色背景
+        scene.fog = new THREE.Fog(0xd3d3d3, 20, 100);
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+        hemiLight.position.set(0, 20, 0);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff);
+        dirLight.position.set(0, 20, 10);
+        scene.add(dirLight);
+
+        // 地面
+        const planeMaterial = new THREE.MeshPhongMaterial({
+          color: 0x333333, // 黑灰色地面
+          depthWrite: false,
+        });
+        const ground = new THREE.Mesh(
+          new THREE.PlaneGeometry(2000, 2000),
+          planeMaterial
+        );
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // 获取 URL 参数中的模型路径
+        const urlParams = new URLSearchParams(window.location.search);
+        const modelUrl = urlParams.get('model') || 'models/default_model.glb';
+
+        // 载入 GLTF 模型
+        const loader = new GLTFLoader();
+        loader.load(
+          modelUrl,
+          (gltf) => {
+            model = gltf.scene;
+            model.traverse((child) => {
+              if (child.isMesh) {
+                // 存储原始材质
+                originalMaterials.set(child, child.material);
+              }
+            });
+
+            // 调整模型位置及缩放
+            const box = new THREE.Box3().setFromObject(model);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            model.position.sub(center);
+
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const maxDimension = Math.max(size.x, size.y, size.z);
+            const scaleVal = 5 / maxDimension;
+            model.scale.set(scaleVal, scaleVal, scaleVal);
+
+            // 创建一个新的组，并将模型添加到组中
+            modelGroup = new THREE.Group();
+            modelGroup.add(model);
+            modelGroup.position.copy(center); // 将组的位置设置为包围盒中心
+
+            scene.add(modelGroup);
+
+            // 调整相机位置和目标
+            camera.position.set(center.x, center.y, center.z + 8);
+            camera.lookAt(center);
+
+            // 更新轨道控制目标
+            controls.target.copy(center);
+            controls.update();
+          },
+          undefined,
+          (err) => {
+            console.error(err);
+          }
+        );
+
+        // 环境光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        // 渲染器
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(renderer.domElement);
+
+        // 轨道控制
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1, 0);
+        controls.update();
+
+        // Stats
+        stats = new Stats();
+        container.appendChild(stats.dom);
+
+        // 窗口变化事件
+        window.addEventListener("resize", onWindowResize);
+
+        // 创建切换按钮
+        const button = document.createElement("button");
+        button.innerText = "Toggle No Texture";
+        document.body.appendChild(button);
+        button.addEventListener("click", toggleNoTextureMode);
+
+        // 创建生成二维码按钮
+        const qrButton = document.createElement("button");
+        qrButton.innerText = "Generate QR Code";
+        qrButton.style.top = "50px";
+        document.body.appendChild(qrButton);
+        qrButton.addEventListener("click", generateQRCode);
+
+        // 创建二维码容器
+        const qrCodeContainer = document.createElement("div");
+        qrCodeContainer.id = "qrcodeContainer";
+        document.body.appendChild(qrCodeContainer);
+
+        // 创建关闭二维码按钮
+        const closeQrCodeButton = document.createElement("button");
+        closeQrCodeButton.id = "closeQrCode";
+        closeQrCodeButton.innerText = "Close";
+        qrCodeContainer.appendChild(closeQrCodeButton);
+
+        // 创建二维码画布
+        const qrCodeCanvas = document.createElement("canvas");
+        qrCodeCanvas.id = "qrcode";
+        qrCodeContainer.appendChild(qrCodeCanvas);
+
+        closeQrCodeButton.addEventListener("click", () => {
+          qrCodeContainer.style.display = "none";
+        });
+      }
+
+      function toggleNoTextureMode() {
+        // 仅纹理 <-> 无纹理
+        currentMode =
+          currentMode === renderModes.Texture
+            ? renderModes.NoTexture
+            : renderModes.Texture;
+
+        if (model) {
+          model.traverse((child) => {
+            if (child.isMesh) {
+              if (currentMode === renderModes.NoTexture) {
+                // 设置亮金色金属材质并添加自发光效果
+                child.material = new THREE.MeshStandardMaterial({
+                  color: 0xffd700, // 亮金色
+                  metalness: 1,
+                  roughness: 0.3,
+                  emissive: 0xffd700, // 自发光颜色
+                  emissiveIntensity: 0.5, // 自发光强度
+                });
+              } else {
+                // 恢复原材质
+                child.material = originalMaterials.get(child);
+              }
+            }
+          });
+        }
+      }
+
+      function generateQRCode() {
+        const qrCodeContainer = document.getElementById("qrcodeContainer");
+        const qrCodeCanvas = document.getElementById("qrcode");
+        const currentUrl = window.location.href;
+        QRCode.toCanvas(qrCodeCanvas, currentUrl, function (error) {
+          if (error) console.error(error);
+          console.log('QR code generated!');
+          qrCodeContainer.style.display = "block"; // 显示二维码容器
+        });
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+        stats.update();
+      }
+    </script>
+  </body>
+</html>
