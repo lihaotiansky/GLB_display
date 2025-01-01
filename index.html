@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta
       name="viewport"
-      content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <style>
       body {
@@ -14,8 +14,10 @@
       }
       button {
         position: absolute;
-        top: 10px;
         left: 10px;
+        padding: 10px;
+        font-size: 14px;
+        z-index: 1;
       }
       #qrcodeContainer {
         display: none;
@@ -26,6 +28,7 @@
         background: white;
         padding: 20px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        z-index: 2;
       }
       #qrcode {
         display: block;
@@ -43,6 +46,12 @@
       }
       #uploadInput {
         display: none;
+      }
+      #stats {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        z-index: 1;
       }
     </style>
   </head>
@@ -175,7 +184,7 @@
         );
 
         // 环境光
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
         scene.add(ambientLight);
 
         // 渲染器
@@ -192,6 +201,7 @@
 
         // Stats
         stats = new Stats();
+        stats.dom.id = 'stats';
         container.appendChild(stats.dom);
 
         // 窗口变化事件
@@ -200,6 +210,7 @@
         // 创建切换按钮
         const button = document.createElement("button");
         button.innerText = "Toggle No Texture";
+        button.style.top = "10px";
         document.body.appendChild(button);
         button.addEventListener("click", toggleNoTextureMode);
 
@@ -318,13 +329,13 @@
           model.traverse((child) => {
             if (child.isMesh) {
               if (currentMode === renderModes.NoTexture) {
-                // 设置亮金色金属材质并添加自发光效果
+                // 设置磨砂银色金属材质
                 child.material = new THREE.MeshStandardMaterial({
-                  color: 0xffd700, // 亮金色
-                  metalness: 1,
-                  roughness: 0.3,
-                  emissive: 0xffd700, // 自发光颜色
-                  emissiveIntensity: 0.5, // 自发光强度
+                  color: 0xc0c0c0, // 银色
+                  metalness: 0.8,
+                  roughness: 0.5,
+                  emissive: 0x000000, // 无自发光颜色
+                  emissiveIntensity: 0.0, // 无自发光强度
                 });
               } else {
                 // 恢复原材质
