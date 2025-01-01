@@ -138,8 +138,16 @@
             model = gltf.scene;
             model.traverse((child) => {
               if (child.isMesh) {
+                // 禁用阴影
+                child.castShadow = false;
+                child.receiveShadow = false;
+
                 // 存储原始材质
                 originalMaterials.set(child, child.material);
+
+                // 设置材质为 MeshBasicMaterial 以仅显示漫反射纹理
+                const texture = child.material.map;
+                child.material = new THREE.MeshBasicMaterial({ map: texture });
               }
             });
 
@@ -278,7 +286,16 @@
           model = gltf.scene;
           model.traverse((child) => {
             if (child.isMesh) {
+              // 禁用阴影
+              child.castShadow = false;
+              child.receiveShadow = false;
+
+              // 存储原始材质
               originalMaterials.set(child, child.material);
+
+              // 设置材质为 MeshBasicMaterial 以仅显示漫反射纹理
+              const texture = child.material.map;
+              child.material = new THREE.MeshBasicMaterial({ map: texture });
             }
           });
 
@@ -330,7 +347,12 @@
                 });
               } else {
                 // 恢复原材质
-                child.material = originalMaterials.get(child);
+                const originalMaterial = originalMaterials.get(child);
+                if (originalMaterial && originalMaterial.map) {
+                  child.material = new THREE.MeshBasicMaterial({ map: originalMaterial.map });
+                } else {
+                  child.material = originalMaterial;
+                }
               }
             }
           });
