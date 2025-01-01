@@ -111,7 +111,12 @@
 
         // 获取 URL 参数中的模型路径
         const urlParams = new URLSearchParams(window.location.search);
-        const modelUrl = urlParams.get('model') ? decodeURIComponent(urlParams.get('model')) : 'models/default_model.glb';
+        let modelUrl = urlParams.get('model') ? decodeURIComponent(urlParams.get('model')) : 'models/default_model.glb';
+
+        // 确保模型 URL 使用 HTTPS
+        if (window.location.protocol === 'https:' && modelUrl.startsWith('http:')) {
+          modelUrl = modelUrl.replace("http://", "https://");
+        }
 
         // 载入 GLTF 模型
         const loader = new GLTFLoader();
@@ -155,7 +160,7 @@
           },
           undefined,
           (err) => {
-            console.error(err);
+            console.error('Error loading model:', err);
           }
         );
 
