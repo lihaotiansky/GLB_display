@@ -41,6 +41,9 @@
         cursor: pointer;
         font-size: 12px;
       }
+      #uploadInput {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -59,9 +62,10 @@
       import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
       import Stats from "three/addons/libs/stats.module.js";
 
-      let container, camera, scene, renderer, stats;
+      let container, camera, scene, renderer, stats, controls;
       let model, modelGroup;
       const originalMaterials = new Map();
+      let initialCameraPosition, initialTarget;
 
       // 模式：仅纹理 或 无纹理
       const renderModes = {
@@ -84,6 +88,9 @@
           100
         );
         camera.position.set(0, 3, 8);
+
+        // 保存初始相机位置
+        initialCameraPosition = camera.position.clone();
 
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0xd3d3d3); // 浅灰色背景
@@ -154,6 +161,9 @@
             camera.position.set(center.x, center.y, center.z + 8);
             camera.lookAt(center);
 
+            // 保存初始目标位置
+            initialTarget = center.clone();
+
             // 更新轨道控制目标
             controls.target.copy(center);
             controls.update();
@@ -176,7 +186,7 @@
         container.appendChild(renderer.domElement);
 
         // 轨道控制
-        const controls = new OrbitControls(camera, renderer.domElement);
+        controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 1, 0);
         controls.update();
 
@@ -200,6 +210,30 @@
         document.body.appendChild(qrButton);
         qrButton.addEventListener("click", generateQRCode);
 
+        // 创建上传模型按钮
+        const uploadButton = document.createElement("button");
+        uploadButton.innerText = "Upload Model";
+        uploadButton.style.top = "90px";
+        document.body.appendChild(uploadButton);
+        uploadButton.addEventListener("click", () => {
+          document.getElementById("uploadInput").click();
+        });
+
+        // 创建重置视野按钮
+        const resetViewButton = document.createElement("button");
+        resetViewButton.innerText = "Reset View";
+        resetViewButton.style.top = "130px";
+        document.body.appendChild(resetViewButton);
+        resetViewButton.addEventListener("click", resetView);
+
+        // 创建文件输入元素
+        const uploadInput = document.createElement("input");
+        uploadInput.type = "file";
+        uploadInput.id = "uploadInput";
+        uploadInput.accept = ".glb, .gltf";
+        document.body.appendChild(uploadInput);
+        uploadInput.addEventListener("change", handleFileUpload);
+
         // 创建二维码容器
         const qrCodeContainer = document.createElement("div");
         qrCodeContainer.id = "qrcodeContainer";
@@ -218,6 +252,58 @@
 
         closeQrCodeButton.addEventListener("click", () => {
           qrCodeContainer.style.display = "none";
+        });
+      }
+
+      function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            const contents = e.target.result;
+            loadModel(contents);
+          };
+          reader.readAsArrayBuffer(file);
+        }
+      }
+
+      function loadModel(contents) {
+        const loader = new GLTFLoader();
+        loader.parse(contents, '', (gltf) => {
+          if (modelGroup) {
+            scene.remove(modelGroup);
+          }
+          model = gltf.scene;
+          model.traverse((child) => {
+            if (child.isMesh) {
+              originalMaterials.set(child, child.material);
+            }
+          });
+
+          const box = new THREE.Box3().setFromObject(model);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          model.position.sub(center);
+
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const maxDimension = Math.max(size.x, size.y, size.z);
+          const scaleVal = 5 / maxDimension;
+          model.scale.set(scaleVal, scaleVal, scaleVal);
+
+          modelGroup = new THREE.Group();
+          modelGroup.add(model);
+          modelGroup.position.copy(center);
+
+          scene.add(modelGroup);
+
+          camera.position.set(center.x, center.y, center.z + 8);
+          camera.lookAt(center);
+
+          controls.target.copy(center);
+          controls.update();
+        }, (error) => {
+          console.error('Error parsing model:', error);
         });
       }
 
@@ -258,6 +344,12 @@
           console.log('QR code generated!');
           qrCodeContainer.style.display = "block"; // 显示二维码容器
         });
+      }
+
+      function resetView() {
+        camera.position.copy(initialCameraPosition);
+        controls.target.copy(initialTarget);
+        controls.update();
       }
 
       function onWindowResize() {
