@@ -50,6 +50,16 @@
       #uploadInput {
         display: none;
       }
+      #speedControlContainer {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        z-index: 1;
+        background: rgba(255, 255, 255, 0.7);
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
     </style>
   </head>
   <body>
@@ -67,10 +77,12 @@
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-      let container, camera, scene, renderer, controls;
+      let container, camera, scene, renderer, controls, mixer;
       let model, modelGroup;
       const originalMaterials = new Map();
       let initialCameraPosition, initialTarget;
+      let clock = new THREE.Clock();
+      let animationSpeed = 1.0;
 
       // 模式：仅纹理 或 无纹理
       const renderModes = {
@@ -180,6 +192,12 @@
             // 更新轨道控制目标
             controls.target.copy(center);
             controls.update();
+
+            // 设置动画混合器
+            mixer = new THREE.AnimationMixer(model);
+            gltf.animations.forEach((clip) => {
+              mixer.clipAction(clip).play();
+            });
           },
           undefined,
           (err) => {
@@ -263,6 +281,30 @@
         closeQrCodeButton.addEventListener("click", () => {
           qrCodeContainer.style.display = "none";
         });
+
+        // 创建速度控制滑条容器
+        const speedControlContainer = document.createElement("div");
+        speedControlContainer.id = "speedControlContainer";
+        document.body.appendChild(speedControlContainer);
+
+        // 创建速度控制滑条标签
+        const speedControlLabel = document.createElement("label");
+        speedControlLabel.innerText = "动画播放速度";
+        speedControlLabel.htmlFor = "speedControl";
+        speedControlContainer.appendChild(speedControlLabel);
+
+        // 创建速度控制滑条
+        const speedControl = document.createElement("input");
+        speedControl.type = "range";
+        speedControl.min = "0.1";
+        speedControl.max = "3.0";
+        speedControl.step = "0.1";
+        speedControl.value = "1.0";
+        speedControl.id = "speedControl";
+        speedControlContainer.appendChild(speedControl);
+        speedControl.addEventListener("input", (event) => {
+          animationSpeed = parseFloat(event.target.value);
+        });
       }
 
       function handleFileUpload(event) {
@@ -321,6 +363,12 @@
 
           controls.target.copy(center);
           controls.update();
+
+          // 设置动画混合器
+          mixer = new THREE.AnimationMixer(model);
+          gltf.animations.forEach((clip) => {
+            mixer.clipAction(clip).play();
+          });
         }, (error) => {
           console.error('Error parsing model:', error);
         });
@@ -384,6 +432,8 @@
 
       function animate() {
         requestAnimationFrame(animate);
+        const delta = clock.getDelta() * animationSpeed;
+        if (mixer) mixer.update(delta); // 更新动画混合器
         renderer.render(scene, camera);
       }
     </script>
