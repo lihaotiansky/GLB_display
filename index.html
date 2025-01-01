@@ -18,6 +18,9 @@
         padding: 10px;
         font-size: 14px;
         z-index: 1;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid #ccc;
+        border-radius: 5px;
       }
       #qrcodeContainer {
         display: none;
@@ -47,12 +50,6 @@
       #uploadInput {
         display: none;
       }
-      #stats {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        z-index: 1;
-      }
     </style>
   </head>
   <body>
@@ -69,9 +66,8 @@
       import * as THREE from "three";
       import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-      import Stats from "three/addons/libs/stats.module.js";
 
-      let container, camera, scene, renderer, stats, controls;
+      let container, camera, scene, renderer, controls;
       let model, modelGroup;
       const originalMaterials = new Map();
       let initialCameraPosition, initialTarget;
@@ -199,11 +195,6 @@
         controls.target.set(0, 1, 0);
         controls.update();
 
-        // Stats
-        stats = new Stats();
-        stats.dom.id = 'stats';
-        container.appendChild(stats.dom);
-
         // 窗口变化事件
         window.addEventListener("resize", onWindowResize);
 
@@ -329,9 +320,9 @@
           model.traverse((child) => {
             if (child.isMesh) {
               if (currentMode === renderModes.NoTexture) {
-                // 设置磨砂银色金属材质
+                // 设置磨砂红金色金属材质
                 child.material = new THREE.MeshStandardMaterial({
-                  color: 0xc0c0c0, // 银色
+                  color: 0xb87333, // 红金色
                   metalness: 0.8,
                   roughness: 0.5,
                   emissive: 0x000000, // 无自发光颜色
@@ -372,7 +363,6 @@
       function animate() {
         requestAnimationFrame(animate);
         renderer.render(scene, camera);
-        stats.update();
       }
     </script>
   </body>
