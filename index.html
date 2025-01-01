@@ -113,9 +113,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         let modelUrl = urlParams.get('model') ? decodeURIComponent(urlParams.get('model')) : 'models/default_model.glb';
 
-        // 确保模型 URL 使用 HTTPS
-        if (window.location.protocol === 'https:' && modelUrl.startsWith('http:')) {
-          modelUrl = modelUrl.replace("http://", "https://");
+        // 使用相对协议
+        if (modelUrl.startsWith('http://') || modelUrl.startsWith('https://')) {
+          modelUrl = modelUrl.replace(/^https?:/, '');
         }
 
         // 载入 GLTF 模型
