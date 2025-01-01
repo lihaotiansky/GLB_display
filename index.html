@@ -111,7 +111,7 @@
 
         // 获取 URL 参数中的模型路径
         const urlParams = new URLSearchParams(window.location.search);
-        const modelUrl = urlParams.get('model') || 'models/default_model.glb';
+        const modelUrl = urlParams.get('model') ? decodeURIComponent(urlParams.get('model')) : 'models/default_model.glb';
 
         // 载入 GLTF 模型
         const loader = new GLTFLoader();
