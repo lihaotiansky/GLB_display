@@ -1,6 +1,11 @@
 		//"http://sp1qspzf4.hn-bkt.clouddn.com/test1/model_low_texture.glb?e=1735730424&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:vcFd5TpmkvFL1Cpr9UnQH3Ryzwo=",
         "http://sp1qspzf4.hn-bkt.clouddn.com/test1/model_low_texture2.glb?e=1735730513&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:AkHPkiZyZeRVQX0TW121FjU4_aM=",  
 
+?model=http://sp1qspzf4.hn-bkt.clouddn.com/test1/model_low_texture2.glb?e=1735675023&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:fURbMzNpCYqVhkyU4IdOr_Yat34=
 
+?model=http://sp1qspzf4.hn-bkt.clouddn.com/test1/model_low_texture2.glb?e=1735675023&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:fURbMzNpCYqVhkyU4IdOr_Yat34=
+http://127.0.0.1:5500/index.html
+https://lihaotiansky.github.io/GLB_display?model=http://sp1qspzf4.hn-bkt.clouddn.com/test1/model_low_texture2.glb?e=1735675023&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:fURbMzNpCYqVhkyU4IdOr_Yat34=
+http://3d.vommatec.com/?model=http://sp1qspzf4.hn-bkt.clouddn.com/test1/wang.glb?e=1735884126&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:yGG9hQ5sw53fugqSlbBbkw1PlCo=
 
-http://127.0.0.1:5500/index.html?model=http://sp1qspzf4.hn-bkt.clouddn.com/test1/model_low_texture2.glb?e=1735675023&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:fURbMzNpCYqVhkyU4IdOr_Yat34=
+http://3d.vommatec.com/?model=http://sp1qspzf4.hn-bkt.clouddn.com/test1/xiao.glb?e=1735884369&token=5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw:Me3kpRbC-YNlmG9sbgLQ6aPHP6k=

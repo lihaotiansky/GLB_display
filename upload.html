@@ -1,0 +1,61 @@
+<!-- upload.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Photos</title>
+</head>
+<body>
+    <h1>Upload Photos</h1>
+    <form id="uploadForm">
+        <input type="file" id="fileInput" multiple accept="image/*" />
+        <button type="button" onclick="uploadPhotos()">Upload</button>
+    </form>
+    <script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        async function uploadPhotos() {
+            const files = document.getElementById('fileInput').files;
+            if (files.length < 30 || files.length > 300) {
+                alert('Please select between 30 and 300 photos.');
+                return;
+            }
+
+            const zip = new JSZip();
+            const folderName = new Date().toISOString().replace(/[:.]/g, '-') + '_device';
+            const folder = zip.folder(folderName);
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileData = await file.arrayBuffer();
+                folder.file(`${i}.webp`, fileData);
+            }
+
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const formData = new FormData();
+            formData.append('file', zipBlob, `${folderName}.zip`);
+            QINIU_ACCESS_KEY='5beU7zbHjjADMt_-Iz9XI95mYDPymErAVb9PL-Bw'
+            QINIU_SECRET_KEY='9UV7O4izLSKNeM2Ixf3ojXCnSkD99DOHtHSvV-L_'
+            QINIU_BUCKET_NAME='vomma'
+            QINIU_BASE_URL='sp1qspzf4.hn-bkt.clouddn.com'
+            q = Auth(QINIU_ACCESS_KEY, QINIU_SECRET_KEY)
+            bucket = qiniu.BucketManager(q)
+
+
+            try {
+                const response = await axios.post(uploadUrl, formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                        'Authorization': `UpToken ${token}`
+                    }
+                });
+                alert('Upload successful!');
+            } catch (error) {
+                console.error('Upload failed:', error);
+                alert('Upload failed.');
+            }
+        }
+    </script>
+</body>
+</html>
