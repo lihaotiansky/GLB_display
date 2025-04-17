@@ -100,6 +100,7 @@
       import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
       import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
       import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+      import { ARButton } from "three/addons/webxr/ARButton.js"; // added ARButton import
 
       let container, camera, scene, renderer, controls, mixer;
       let model, modelGroup, ground;
@@ -247,10 +248,13 @@
 
         // 渲染器
         renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.xr.enabled = true; // enable XR for AR support
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.outputEncoding = THREE.sRGBEncoding;
         container.appendChild(renderer.domElement);
+
+        document.body.appendChild(ARButton.createButton(renderer)); // add AR button
 
         // 轨道控制
         controls = new OrbitControls(camera, renderer.domElement);
