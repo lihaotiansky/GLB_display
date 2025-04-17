@@ -242,95 +242,6 @@
         dirLight2.position.set(0, 0, -20);
         scene.add(dirLight2);
 
-        // 创建AR放置指示器
-        const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
-        const reticleMaterial = new THREE.MeshBasicMaterial();
-        reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-        reticle.matrixAutoUpdate = false;
-        reticle.visible = false;
-        scene.add(reticle);
-
-        // 渲染器
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // 添加alpha通道以支持透明背景
-        renderer.xr.enabled = true;
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.outputEncoding = THREE.sRGBEncoding;
-        container.appendChild(renderer.domElement);
-
-        // 添加AR会话开始和结束的监听器
-        renderer.xr.addEventListener('sessionstart', function () {
-          console.log('AR session started');
-          scene.background = null;
-          scene.fog = null;
-          scene.remove(ground);
-          
-          document.querySelectorAll('button').forEach(btn => {
-            if (btn.id !== 'ARButton') btn.style.display = 'none';
-          });
-          document.getElementById('speedControlContainer').style.display = 'none';
-          document.getElementById('viewButtons').style.display = 'none';
-          
-          placedInAR = false;
-          
-          if (modelGroup) {
-            modelGroup.visible = false;
-          }
-        });
-
-        renderer.xr.addEventListener('sessionend', function () {
-          console.log('AR session ended');
-          scene.background = new THREE.Color(0xd3d3d3);
-          scene.fog = new THREE.Fog(0xd3d3d3, 20, 100);
-          scene.add(ground);
-          
-          document.querySelectorAll('button').forEach(btn => {
-            btn.style.display = '';
-          });
-          document.getElementById('speedControlContainer').style.display = '';
-          document.getElementById('viewButtons').style.display = '';
-          
-          if (modelGroup) {
-            modelGroup.visible = true;
-            resetModelPositionAndScale(model);
-          }
-          
-          hitTestSource = null;
-          hitTestSourceRequested = false;
-          reticle.visible = false;
-        });
-
-        const arButtonWrapper = document.createElement('div');
-        arButtonWrapper.style.position = 'fixed';
-        arButtonWrapper.style.bottom = '75px';
-        arButtonWrapper.style.left = '50%';
-        arButtonWrapper.style.transform = 'translateX(-50%)';
-        arButtonWrapper.style.zIndex = '999';
-        document.body.appendChild(arButtonWrapper);
-        
-        const arButton = ARButton.createButton(renderer, {
-          requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay'],
-          domOverlay: { root: document.body }
-        });
-        arButtonWrapper.appendChild(arButton);
-        
-        const arInstructions = document.createElement('div');
-        arInstructions.id = 'ar-instructions';
-        arInstructions.style.position = 'fixed';
-        arInstructions.style.top = '50%';
-        arInstructions.style.left = '50%';
-        arInstructions.style.transform = 'translate(-50%, -50%)';
-        arInstructions.style.background = 'rgba(0,0,0,0.7)';
-        arInstructions.style.color = 'white';
-        arInstructions.style.padding = '20px';
-        arInstructions.style.borderRadius = '10px';
-        arInstructions.style.textAlign = 'center';
-        arInstructions.style.display = 'none';
-        arInstructions.style.zIndex = '1000';
-        arInstructions.innerHTML = '找到一个平面，<br>然后点击圆环放置模型';
-        document.body.appendChild(arInstructions);
-
         controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 1, 0);
         controls.minDistance = 1;
@@ -427,6 +338,46 @@
         viewButtons.appendChild(frontViewButton);
         viewButtons.appendChild(sideViewButton);
         viewButtons.appendChild(backViewButton);
+
+        // 将ARButton相关代码替换为自定义AR按钮
+        const arButtonWrapper = document.createElement('div');
+        arButtonWrapper.style.position = 'fixed';
+        arButtonWrapper.style.bottom = '75px';
+        arButtonWrapper.style.left = '50%';
+        arButtonWrapper.style.transform = 'translateX(-50%)';
+        arButtonWrapper.style.zIndex = '999';
+        document.body.appendChild(arButtonWrapper);
+
+        const customARButton = document.createElement('button');
+        customARButton.id = 'customARButton';
+        customARButton.textContent = '进入AR查看';
+        customARButton.style.background = '#4285f4';
+        customARButton.style.color = 'white';
+        customARButton.style.border = 'none';
+        customARButton.style.borderRadius = '4px';
+        customARButton.style.padding = '12px 24px';
+        customARButton.style.cursor = 'pointer';
+        customARButton.style.fontWeight = 'bold';
+        customARButton.style.fontSize = '16px';
+
+        customARButton.addEventListener('click', function() {
+          // 获取当前模型URL
+          const currentModelUrl = modelUrl || testmodelUrl;
+          // 跳转到model-viewer-ar.html并传递模型URL参数
+          window.location.href = `model-viewer-ar.html?model=${encodeURIComponent(currentModelUrl)}`;
+        });
+
+        arButtonWrapper.appendChild(customARButton);
+
+        // 移除原有的AR相关元素
+        const existingARButton = document.getElementById('ARButton');
+        if (existingARButton) {
+          existingARButton.parentNode.removeChild(existingARButton);
+        }
+        const arInstructions = document.getElementById('ar-instructions');
+        if (arInstructions) {
+          arInstructions.parentNode.removeChild(arInstructions);
+        }
       }
 
       function createViewButton(text, onClick) {
@@ -648,78 +599,7 @@
       function render() {
         const delta = clock.getDelta() * animationSpeed;
         if (mixer) mixer.update(delta);
-        
-        if (renderer.xr.isPresenting) {
-          document.getElementById('ar-instructions').style.display = placedInAR ? 'none' : 'block';
-          
-          const session = renderer.xr.getSession();
-          
-          if (session && hitTestSourceRequested === false) {
-            session.requestReferenceSpace('viewer').then(function (referenceSpace) {
-              session.requestHitTestSource({ space: referenceSpace }).then(function (source) {
-                hitTestSource = source;
-              });
-            });
-            
-            session.addEventListener('end', function () {
-              hitTestSourceRequested = false;
-              hitTestSource = null;
-            });
-            
-            hitTestSourceRequested = true;
-          }
-          
-          if (hitTestSource) {
-            const referenceSpace = renderer.xr.getReferenceSpace();
-            hitTestSource.getHitTestResults(referenceSpace).then(function (results) {
-              if (results.length) {
-                const hit = results[0];
-                reticle.visible = !placedInAR;
-                reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
-                
-                if (!placedInAR && session.inputSources[0].gamepad && session.inputSources[0].gamepad.buttons[0].pressed) {
-                  placeModelInAR(hit.getPose(referenceSpace).transform.matrix);
-                }
-              } else {
-                reticle.visible = false;
-              }
-            });
-          }
-        }
-        
         renderer.render(scene, camera);
-      }
-      
-      function placeModelInAR(matrix) {
-        if (!modelGroup || placedInAR) return;
-        
-        const transform = new THREE.Matrix4().fromArray(matrix);
-        modelGroup.position.setFromMatrixPosition(transform);
-        modelGroup.quaternion.setFromRotationMatrix(transform);
-        
-        const currentScale = modelGroup.scale.x;
-        modelGroup.scale.multiplyScalar(0.5 / currentScale);
-        
-        modelGroup.visible = true;
-        placedInAR = true;
-        
-        document.getElementById('ar-instructions').style.display = 'none';
-        
-        window.addEventListener('dblclick', resetARPlacement, { once: true });
-        
-        console.log('Model placed in AR');
-      }
-      
-      function resetARPlacement() {
-        if (renderer.xr.isPresenting && placedInAR) {
-          placedInAR = false;
-          if (modelGroup) {
-            modelGroup.visible = false;
-          }
-          reticle.visible = true;
-          document.getElementById('ar-instructions').style.display = 'block';
-          console.log('AR placement reset');
-        }
       }
     </script>
   </body>
