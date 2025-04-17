@@ -100,7 +100,7 @@
       import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
       import { RGBELoader } from "three/addons/loaders/RGBELoader.js";
       import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-      import { ARButton } from "three/addons/webxr/ARButton.js"; // added ARButton import
+      import { ARButton } from "three/addons/webxr/ARButton.js";
 
       let container, camera, scene, renderer, controls, mixer;
       let model, modelGroup, ground;
@@ -108,6 +108,12 @@
       let initialCameraPosition, initialTarget;
       let clock = new THREE.Clock();
       let animationSpeed = 1.0;
+
+      // AR variables
+      let reticle; // AR placement indicator
+      let hitTestSource = null;
+      let hitTestSourceRequested = false;
+      let placedInAR = false; // Indicates if the model has been placed in the AR scene
 
       // 模式：仅纹理 或 无纹理
       const renderModes = {
@@ -146,8 +152,6 @@
         hemiLight2.position.set(0, -20, 0);
         scene.add(hemiLight2);
 
-
-
         const dirLight = new THREE.DirectionalLight(0xffffff);
         dirLight.position.set(0, 0, 20);
         scene.add(dirLight);
@@ -161,7 +165,6 @@
         Light5.position.set(-20, 0, 0);
         scene.add(Light5);
 
-
         // 地面
         const planeMaterial = new THREE.MeshPhongMaterial({
           color: 0x333333, // 黑灰色地面
@@ -172,25 +175,18 @@
         scene.add(ground);
 
         let testmodelUrl = "http://data.3d.vommatec.com/VOMMA_Lab/test_wang_1.glb";      
-        // let testmodelUrl = "http://data.3d.vommatec.com/VOMMA_Lab/yud.glb?Expires=1737761555%26OSSAccessKeyId=TMP.3KdKk915Hh28wodbjF9dr9GPufsX9xtbSWNbTooyaUFFMvDtHTGUHWsPSjTzpcQakDy5azqUwnvAc1pYxB9hhAy1487XxE%26Signature=lu%2BYH%2FUITdPDT1iEE5eD2HNYhNw%3D"
-        // 获取 URL 参数中的模型路径
         const urlParams = new URLSearchParams(window.location.search);
         const encodedModelUrl  = urlParams.get('model');
         let modelUrl;
         if (encodedModelUrl ) {
-          // 解码 URL 参数
           modelUrl = decodeURIComponent(encodedModelUrl);
           console.log("Decoded URL:", modelUrl);
-
         } else {
-          // 如果没有传递 model 参数，使用默认模型
-          modelUrl = testmodelUrl;//"models/yud.glb";
+          modelUrl = testmodelUrl;
         }
 
         console.log("Model URL:", modelUrl);
 
-
-          //print(modelUrl);
         // 载入 GLTF 模型
         const loader = new GLTFLoader();
         const dracoLoader = new DRACOLoader();
@@ -246,9 +242,17 @@
         dirLight2.position.set(0, 0, -20);
         scene.add(dirLight2);
 
+        // 创建AR放置指示器
+        const reticleGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+        const reticleMaterial = new THREE.MeshBasicMaterial();
+        reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
+        reticle.matrixAutoUpdate = false;
+        reticle.visible = false;
+        scene.add(reticle);
+
         // 渲染器
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.xr.enabled = true; // enable XR for AR support
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // 添加alpha通道以支持透明背景
+        renderer.xr.enabled = true;
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.outputEncoding = THREE.sRGBEncoding;
@@ -256,52 +260,97 @@
 
         // 添加AR会话开始和结束的监听器
         renderer.xr.addEventListener('sessionstart', function () {
-          // AR模式下移除背景色和雾气
+          console.log('AR session started');
           scene.background = null;
           scene.fog = null;
-          scene.remove(ground); // 移除地面
+          scene.remove(ground);
+          
+          document.querySelectorAll('button').forEach(btn => {
+            if (btn.id !== 'ARButton') btn.style.display = 'none';
+          });
+          document.getElementById('speedControlContainer').style.display = 'none';
+          document.getElementById('viewButtons').style.display = 'none';
+          
+          placedInAR = false;
+          
+          if (modelGroup) {
+            modelGroup.visible = false;
+          }
         });
 
         renderer.xr.addEventListener('sessionend', function () {
-          // 恢复背景色和雾气
+          console.log('AR session ended');
           scene.background = new THREE.Color(0xd3d3d3);
           scene.fog = new THREE.Fog(0xd3d3d3, 20, 100);
-          scene.add(ground); // 恢复地面
+          scene.add(ground);
+          
+          document.querySelectorAll('button').forEach(btn => {
+            btn.style.display = '';
+          });
+          document.getElementById('speedControlContainer').style.display = '';
+          document.getElementById('viewButtons').style.display = '';
+          
+          if (modelGroup) {
+            modelGroup.visible = true;
+            resetModelPositionAndScale(model);
+          }
+          
+          hitTestSource = null;
+          hitTestSourceRequested = false;
+          reticle.visible = false;
         });
 
-        // 添加AR按钮
+        const arButtonWrapper = document.createElement('div');
+        arButtonWrapper.style.position = 'fixed';
+        arButtonWrapper.style.bottom = '75px';
+        arButtonWrapper.style.left = '50%';
+        arButtonWrapper.style.transform = 'translateX(-50%)';
+        arButtonWrapper.style.zIndex = '999';
+        document.body.appendChild(arButtonWrapper);
+        
         const arButton = ARButton.createButton(renderer, {
-          requiredFeatures: ['hit-test'], // 添加hit-test功能
-          optionalFeatures: ['dom-overlay'], // 添加dom-overlay功能
+          requiredFeatures: ['hit-test'],
+          optionalFeatures: ['dom-overlay'],
           domOverlay: { root: document.body }
         });
-        document.body.appendChild(arButton);
+        arButtonWrapper.appendChild(arButton);
+        
+        const arInstructions = document.createElement('div');
+        arInstructions.id = 'ar-instructions';
+        arInstructions.style.position = 'fixed';
+        arInstructions.style.top = '50%';
+        arInstructions.style.left = '50%';
+        arInstructions.style.transform = 'translate(-50%, -50%)';
+        arInstructions.style.background = 'rgba(0,0,0,0.7)';
+        arInstructions.style.color = 'white';
+        arInstructions.style.padding = '20px';
+        arInstructions.style.borderRadius = '10px';
+        arInstructions.style.textAlign = 'center';
+        arInstructions.style.display = 'none';
+        arInstructions.style.zIndex = '1000';
+        arInstructions.innerHTML = '找到一个平面，<br>然后点击圆环放置模型';
+        document.body.appendChild(arInstructions);
 
-        // 轨道控制
         controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 1, 0);
         controls.minDistance = 1;
         controls.maxDistance = 50;
         controls.update();
 
-        // 窗口变化事件
         window.addEventListener("resize", onWindowResize);
 
-        // 创建切换按钮
         const button = document.createElement("button");
         button.innerText = "Toggle No Texture";
         button.style.top = "10px";
         document.body.appendChild(button);
         button.addEventListener("click", toggleNoTextureMode);
 
-        // 创建生成二维码按钮
         const qrButton = document.createElement("button");
         qrButton.innerText = "Generate QR Code";
         qrButton.style.top = "50px";
         document.body.appendChild(qrButton);
         qrButton.addEventListener("click", generateQRCode);
 
-        // 创建上传模型按钮
         const uploadButton = document.createElement("button");
         uploadButton.innerText = "Upload Model";
         uploadButton.style.top = "90px";
@@ -310,21 +359,18 @@
           document.getElementById("uploadInput").click();
         });
 
-        // 创建重置视野按钮
         const resetViewButton = document.createElement("button");
         resetViewButton.innerText = "Reset View";
         resetViewButton.style.top = "130px";
         document.body.appendChild(resetViewButton);
         resetViewButton.addEventListener("click", resetView);
 
-        // 创建切换背景按钮
         const backgroundButton = document.createElement("button");
         backgroundButton.innerText = "Toggle Background";
         backgroundButton.style.top = "170px";
         document.body.appendChild(backgroundButton);
         backgroundButton.addEventListener("click", toggleBackground);
 
-        // 创建文件输入元素
         const uploadInput = document.createElement("input");
         uploadInput.type = "file";
         uploadInput.id = "uploadInput";
@@ -332,18 +378,15 @@
         document.body.appendChild(uploadInput);
         uploadInput.addEventListener("change", handleFileUpload);
 
-        // 创建二维码容器
         const qrCodeContainer = document.createElement("div");
         qrCodeContainer.id = "qrcodeContainer";
         document.body.appendChild(qrCodeContainer);
 
-        // 创建关闭二维码按钮
         const closeQrCodeButton = document.createElement("button");
         closeQrCodeButton.id = "closeQrCode";
         closeQrCodeButton.innerText = "Close";
         qrCodeContainer.appendChild(closeQrCodeButton);
 
-        // 创建二维码画布
         const qrCodeCanvas = document.createElement("canvas");
         qrCodeCanvas.id = "qrcode";
         qrCodeContainer.appendChild(qrCodeCanvas);
@@ -352,18 +395,15 @@
           qrCodeContainer.style.display = "none";
         });
 
-        // 创建速度控制滑条容器
         const speedControlContainer = document.createElement("div");
         speedControlContainer.id = "speedControlContainer";
         document.body.appendChild(speedControlContainer);
 
-        // 创建速度控制滑条标签
         const speedControlLabel = document.createElement("label");
         speedControlLabel.innerText = "Animation Speed";
         speedControlLabel.htmlFor = "speedControl";
         speedControlContainer.appendChild(speedControlLabel);
 
-        // 创建速度控制滑条
         const speedControl = document.createElement("input");
         speedControl.type = "range";
         speedControl.min = "0.1";
@@ -376,7 +416,6 @@
           animationSpeed = parseFloat(event.target.value);
         });
 
-        // 创建视角切换按钮
         const viewButtons = document.createElement("div");
         viewButtons.id = "viewButtons";
         document.body.appendChild(viewButtons);
@@ -411,7 +450,6 @@
         controls.update();
       }
 
-      // 切换无纹理 / 原纹理
       function toggleNoTextureMode() {
         currentMode =
           currentMode === renderModes.Texture
@@ -422,16 +460,14 @@
           model.traverse((child) => {
             if (child.isMesh) {
               if (currentMode === renderModes.NoTexture) {
-                // 设置磨砂红金色金属材质
                 child.material = new THREE.MeshStandardMaterial({
-                  color: 0xb87333, // 红金色
+                  color: 0xb87333,
                   metalness: 0.9,
                   roughness: 0.6,
                   emissive: 0x000000,
                   emissiveIntensity: 0.0,
                 });
               } else {
-                // 恢复原材质
                 const originalMaterial = originalMaterials.get(child);
                 if (originalMaterial && originalMaterial.map) {
                   child.material = new THREE.MeshBasicMaterial({ map: originalMaterial.map });
@@ -444,13 +480,11 @@
         }
       }
 
-      // 切换背景EXR
       function toggleBackground() {
         currentBackgroundIndex++;
         if (currentBackgroundIndex >= backgroundFiles.length) {
-          // 恢复原背景
           scene.background = new THREE.Color(0xd3d3d3);
-          scene.add(ground); // 恢复地面
+          scene.add(ground);
           currentBackgroundIndex = -1;
         } else {
           const file = backgroundFiles[currentBackgroundIndex];
@@ -463,7 +497,7 @@
               (texture) => {
                 texture.mapping = THREE.EquirectangularReflectionMapping;
                 scene.background = texture;
-                scene.remove(ground); // 移除地面
+                scene.remove(ground);
               },
               undefined,
               (error) => {
@@ -477,34 +511,33 @@
               (texture) => {
                 texture.mapping = THREE.EquirectangularReflectionMapping;
                 scene.background = texture;
-                scene.remove(ground); // 移除地面
+                scene.remove(ground);
               },
               undefined,
               (error) => {
                 console.error("Error loading HDR:", error);
               }
-      );
-    } else if (extension === 'jpg' || extension === 'jpeg' || extension === 'png') {
-      const textureLoader = new THREE.TextureLoader();
-      textureLoader.load(
-        file,
-        (texture) => {
-          texture.mapping = THREE.EquirectangularReflectionMapping;
-          scene.background = texture;
-          scene.remove(ground); // 移除地面
-        },
-        undefined,
-        (error) => {
-          console.error("Error loading image:", error);
+            );
+          } else if (extension === 'jpg' || extension === 'jpeg' || extension === 'png') {
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(
+              file,
+              (texture) => {
+                texture.mapping = THREE.EquirectangularReflectionMapping;
+                scene.background = texture;
+                scene.remove(ground);
+              },
+              undefined,
+              (error) => {
+                console.error("Error loading image:", error);
+              }
+            );
+          } else {
+            console.error("Unsupported background file format:", extension);
+          }
         }
-      );
-    } else {
-      console.error("Unsupported background file format:", extension);
-    }
-  }
       }
 
-// 重置视图
       function resetView() {
         if (!initialCameraPosition || !initialTarget) {
           console.error("initialCameraPosition or initialTarget is not defined");
@@ -515,7 +548,6 @@
         controls.update();
       }
 
-      // 生成二维码
       function generateQRCode() {
         const qrCodeContainer = document.getElementById("qrcodeContainer");
         const qrCodeCanvas = document.getElementById("qrcode");
@@ -526,7 +558,6 @@
         });
       }
 
-      // 上传文件
       function handleFileUpload(event) {
         const file = event.target.files[0];
         if (file) {
@@ -539,11 +570,10 @@
         }
       }
 
-      // 加载用户文件
       function loadModel(contents) {
         const loader = new GLTFLoader();
         const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath('./js/draco/'); // 设置 Draco 解码器路径
+        dracoLoader.setDecoderPath('./js/draco/');
         loader.setDRACOLoader(dracoLoader);
 
         loader.parse(
@@ -583,15 +613,12 @@
         );
       }
 
-      // 缩放&居中
       function resetModelPositionAndScale(model) {
         model.traverse((child) => {
           if (child.isMesh) {
             child.castShadow = false;
             child.receiveShadow = false;
-            // 缓存原材质
             originalMaterials.set(child, child.material);
-            // 使用 BasicMaterial 显示原纹理
             const texture = child.material.map;
             child.material = new THREE.MeshBasicMaterial({ map: texture });
           }
@@ -608,7 +635,6 @@
         model.scale.set(scaleVal, scaleVal, scaleVal);
       }
 
-      // 窗口大小变化
       function onWindowResize() {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -616,14 +642,84 @@
       }
 
       function animate() {
-        // 使用setAnimationLoop代替requestAnimationFrame以支持WebXR
         renderer.setAnimationLoop(render);
       }
 
       function render() {
         const delta = clock.getDelta() * animationSpeed;
         if (mixer) mixer.update(delta);
+        
+        if (renderer.xr.isPresenting) {
+          document.getElementById('ar-instructions').style.display = placedInAR ? 'none' : 'block';
+          
+          const session = renderer.xr.getSession();
+          
+          if (session && hitTestSourceRequested === false) {
+            session.requestReferenceSpace('viewer').then(function (referenceSpace) {
+              session.requestHitTestSource({ space: referenceSpace }).then(function (source) {
+                hitTestSource = source;
+              });
+            });
+            
+            session.addEventListener('end', function () {
+              hitTestSourceRequested = false;
+              hitTestSource = null;
+            });
+            
+            hitTestSourceRequested = true;
+          }
+          
+          if (hitTestSource) {
+            const referenceSpace = renderer.xr.getReferenceSpace();
+            hitTestSource.getHitTestResults(referenceSpace).then(function (results) {
+              if (results.length) {
+                const hit = results[0];
+                reticle.visible = !placedInAR;
+                reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                
+                if (!placedInAR && session.inputSources[0].gamepad && session.inputSources[0].gamepad.buttons[0].pressed) {
+                  placeModelInAR(hit.getPose(referenceSpace).transform.matrix);
+                }
+              } else {
+                reticle.visible = false;
+              }
+            });
+          }
+        }
+        
         renderer.render(scene, camera);
+      }
+      
+      function placeModelInAR(matrix) {
+        if (!modelGroup || placedInAR) return;
+        
+        const transform = new THREE.Matrix4().fromArray(matrix);
+        modelGroup.position.setFromMatrixPosition(transform);
+        modelGroup.quaternion.setFromRotationMatrix(transform);
+        
+        const currentScale = modelGroup.scale.x;
+        modelGroup.scale.multiplyScalar(0.5 / currentScale);
+        
+        modelGroup.visible = true;
+        placedInAR = true;
+        
+        document.getElementById('ar-instructions').style.display = 'none';
+        
+        window.addEventListener('dblclick', resetARPlacement, { once: true });
+        
+        console.log('Model placed in AR');
+      }
+      
+      function resetARPlacement() {
+        if (renderer.xr.isPresenting && placedInAR) {
+          placedInAR = false;
+          if (modelGroup) {
+            modelGroup.visible = false;
+          }
+          reticle.visible = true;
+          document.getElementById('ar-instructions').style.display = 'block';
+          console.log('AR placement reset');
+        }
       }
     </script>
   </body>
