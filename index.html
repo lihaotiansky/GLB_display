@@ -174,18 +174,37 @@
         ground.rotation.x = -Math.PI / 2;
         scene.add(ground);
 
-        let testmodelUrl = "http://data.3d.vommatec.com/VOMMA_Lab/test_wang_1.glb";      
+        // 模型URL处理
+        let testmodelUrl = "https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf"; // 使用Three.js示例中的开放模型
+        const fallbackModels = [
+          "https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf",
+          "https://modelviewer.dev/shared-assets/models/Astronaut.glb",
+          "./models/cube.glb" // 假设你有一个本地备用模型
+        ];
+        
         const urlParams = new URLSearchParams(window.location.search);
-        const encodedModelUrl  = urlParams.get('model');
+        const encodedModelUrl = urlParams.get('model');
         let modelUrl;
-        if (encodedModelUrl ) {
+        if (encodedModelUrl) {
           modelUrl = decodeURIComponent(encodedModelUrl);
-          console.log("Decoded URL:", modelUrl);
+          console.log("尝试加载模型:", modelUrl);
         } else {
           modelUrl = testmodelUrl;
         }
 
-        console.log("Model URL:", modelUrl);
+        // 添加模型加载状态提示
+        const loadingElement = document.createElement('div');
+        loadingElement.style.position = 'fixed';
+        loadingElement.style.top = '50%';
+        loadingElement.style.left = '50%';
+        loadingElement.style.transform = 'translate(-50%, -50%)';
+        loadingElement.style.padding = '20px';
+        loadingElement.style.background = 'rgba(0,0,0,0.7)';
+        loadingElement.style.color = 'white';
+        loadingElement.style.borderRadius = '10px';
+        loadingElement.style.zIndex = '1000';
+        loadingElement.textContent = '加载模型中...';
+        document.body.appendChild(loadingElement);
 
         // 载入 GLTF 模型
         const loader = new GLTFLoader();
@@ -193,44 +212,91 @@
         dracoLoader.setDecoderPath('./js/draco/'); // 设置 Draco 解码器路径
         loader.setDRACOLoader(dracoLoader);
         
-        loader.load(
-          modelUrl,
-          (gltf) => {
-            model = gltf.scene;
-            resetModelPositionAndScale(model);
+        let currentModelIndex = 0;
+        
+        function tryLoadModel(url) {
+          loadingElement.textContent = '加载模型中...' + (currentModelIndex > 0 ? `(尝试备用模型 ${currentModelIndex})` : '');
+          
+          loader.load(
+            url,
+            (gltf) => {
+              // 成功加载模型
+              loadingElement.style.display = 'none';
+              
+              model = gltf.scene;
+              resetModelPositionAndScale(model);
 
-            // 创建一个新的组，并将模型添加到组中
-            modelGroup = new THREE.Group();
-            modelGroup.add(model);
-            scene.add(modelGroup);
+              // 创建一个新的组，并将模型添加到组中
+              modelGroup = new THREE.Group();
+              modelGroup.add(model);
+              scene.add(modelGroup);
 
-            // 调整相机位置和目标
-            const center = new THREE.Vector3();
-            new THREE.Box3().setFromObject(model).getCenter(center);
-            camera.position.set(center.x, center.y, center.z + 8);
-            camera.lookAt(center);
+              // 调整相机位置和目标
+              const center = new THREE.Vector3();
+              new THREE.Box3().setFromObject(model).getCenter(center);
+              camera.position.set(center.x, center.y, center.z + 8);
+              camera.lookAt(center);
 
-            // 保存初始相机位置和目标位置
-            initialCameraPosition = camera.position.clone();
-            initialTarget = center.clone();
+              // 保存初始相机位置和目标位置
+              initialCameraPosition = camera.position.clone();
+              initialTarget = center.clone();
 
-            // 更新轨道控制目标
-            controls.target.copy(center);
-            controls.update();
+              // 更新轨道控制目标
+              controls.target.copy(center);
+              controls.update();
 
-            // 设置动画混合器
-            mixer = new THREE.AnimationMixer(model);
-            gltf.animations.forEach((clip) => {
-              mixer.clipAction(clip).play();
-            });
-          },
-          undefined,
-          (err) => {
-            console.error("Error loading model:", err);
-          }
-        );
+              // 设置动画混合器
+              mixer = new THREE.AnimationMixer(model);
+              gltf.animations.forEach((clip) => {
+                mixer.clipAction(clip).play();
+              });
+            },
+            (xhr) => {
+              // 加载进度
+              const percentComplete = (xhr.loaded / xhr.total) * 100;
+              loadingElement.textContent = `加载模型中: ${Math.round(percentComplete)}%`;
+            },
+            (err) => {
+              // 错误处理
+              console.error("Error loading model:", err);
+              
+              // 尝试加载备用模型
+              currentModelIndex++;
+              if (currentModelIndex < fallbackModels.length) {
+                console.log(`尝试加载备用模型 ${currentModelIndex}:`, fallbackModels[currentModelIndex]);
+                tryLoadModel(fallbackModels[currentModelIndex]);
+              } else {
+                loadingElement.textContent = '无法加载模型。请检查网络连接或尝试上传本地模型。';
+                loadingElement.style.background = 'rgba(200,0,0,0.7)';
+                
+                // 创建简单的立方体作为最终回退
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshStandardMaterial({ color: 0x888888 });
+                const cube = new THREE.Mesh(geometry, material);
+                
+                modelGroup = new THREE.Group();
+                modelGroup.add(cube);
+                scene.add(modelGroup);
+                
+                camera.position.set(0, 0, 5);
+                camera.lookAt(0, 0, 0);
+                initialCameraPosition = camera.position.clone();
+                initialTarget = new THREE.Vector3(0, 0, 0);
+                controls.target.copy(initialTarget);
+                controls.update();
+                
+                // 3秒后隐藏错误信息
+                setTimeout(() => {
+                  loadingElement.style.display = 'none';
+                }, 3000);
+              }
+            }
+          );
+        }
+        
+        // 开始尝试加载模型
+        tryLoadModel(modelUrl);
 
-        // 环境光
         const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         scene.add(ambientLight);
 
@@ -242,6 +308,15 @@
         dirLight2.position.set(0, 0, -20);
         scene.add(dirLight2);
 
+        // 渲染器 - 确保在创建controls之前初始化
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.xr.enabled = true;
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(renderer.domElement);
+
+        // 轨道控制 - 现在可以正确地访问renderer.domElement
         controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 1, 0);
         controls.minDistance = 1;
@@ -342,32 +417,58 @@
         // 将ARButton相关代码替换为自定义AR按钮
         const arButtonWrapper = document.createElement('div');
         arButtonWrapper.style.position = 'fixed';
-        arButtonWrapper.style.bottom = '75px';
-        arButtonWrapper.style.left = '50%';
-        arButtonWrapper.style.transform = 'translateX(-50%)';
+        arButtonWrapper.style.bottom = '30px';
+        arButtonWrapper.style.left = '50%'; // 放在中间
+        arButtonWrapper.style.transform = 'translateX(-50%)'; // 居中对齐
         arButtonWrapper.style.zIndex = '999';
+        arButtonWrapper.style.display = 'flex'; // 使用flex布局
+        arButtonWrapper.style.alignItems = 'center'; // 垂直居中对齐
+        arButtonWrapper.style.background = '#fff';
+        arButtonWrapper.style.borderRadius = '30px';
+        arButtonWrapper.style.padding = '8px 16px';
+        arButtonWrapper.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.25)';
+        arButtonWrapper.style.cursor = 'pointer';
+        arButtonWrapper.style.transition = 'transform 0.2s ease, background 0.2s ease';
         document.body.appendChild(arButtonWrapper);
 
-        const customARButton = document.createElement('button');
-        customARButton.id = 'customARButton';
-        customARButton.textContent = '进入AR查看';
-        customARButton.style.background = '#4285f4';
-        customARButton.style.color = 'white';
-        customARButton.style.border = 'none';
-        customARButton.style.borderRadius = '4px';
-        customARButton.style.padding = '12px 24px';
-        customARButton.style.cursor = 'pointer';
-        customARButton.style.fontWeight = 'bold';
-        customARButton.style.fontSize = '16px';
+        // 创建图标元素
+        const arIcon = document.createElement('img');
+        arIcon.src = './ic_modelviewer.svg'; // 使用文件夹内的SVG文件
+        arIcon.style.width = '28px';
+        arIcon.style.height = '28px';
+        arIcon.style.marginRight = '8px'; // 添加右侧间距
+        arButtonWrapper.appendChild(arIcon);
+        
+        // 添加文字元素
+        const arText = document.createElement('span');
+        arText.textContent = 'AR';
+        arText.style.color = '#4285f4';
+        arText.style.fontSize = '16px';
+        arText.style.fontWeight = 'bold';
+        arButtonWrapper.appendChild(arText);
+        
+        // 添加悬停和点击效果
+        arButtonWrapper.onmouseenter = function() {
+            this.style.transform = 'translateX(-50%) scale(1.05)';
+            this.style.background = '#f8f8f8';
+        };
+        
+        arButtonWrapper.onmouseleave = function() {
+            this.style.transform = 'translateX(-50%) scale(1.0)';
+            this.style.background = '#fff';
+        };
 
-        customARButton.addEventListener('click', function() {
-          // 获取当前模型URL
-          const currentModelUrl = modelUrl || testmodelUrl;
-          // 跳转到model-viewer-ar.html并传递模型URL参数
-          window.location.href = `model-viewer-ar.html?model=${encodeURIComponent(currentModelUrl)}`;
+        arButtonWrapper.addEventListener('click', function() {
+            // 添加点击动画效果
+            this.style.transform = 'translateX(-50%) scale(0.95)';
+            setTimeout(() => {
+                this.style.transform = 'translateX(-50%) scale(1.0)';
+                // 获取当前模型URL
+                const currentModelUrl = modelUrl || testmodelUrl;
+                // 跳转到model-viewer-ar.html并传递模型URL参数
+                window.location.href = `model-viewer-ar.html?model=${encodeURIComponent(currentModelUrl)}`;
+            }, 150);
         });
-
-        arButtonWrapper.appendChild(customARButton);
 
         // 移除原有的AR相关元素
         const existingARButton = document.getElementById('ARButton');
@@ -377,6 +478,11 @@
         const arInstructions = document.getElementById('ar-instructions');
         if (arInstructions) {
           arInstructions.parentNode.removeChild(arInstructions);
+        }
+        // 移除旧的自定义AR按钮如果存在
+        const oldCustomARButton = document.getElementById('customARButton');
+        if (oldCustomARButton && oldCustomARButton.parentNode) {
+          oldCustomARButton.parentNode.removeChild(oldCustomARButton);
         }
       }
 
