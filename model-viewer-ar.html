@@ -106,6 +106,32 @@
       display: none;
       z-index: 200;
     }
+
+    .control-buttons {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10;
+    }
+    
+    .control-button {
+      background-color: white;
+      border: none;
+      border-radius: 4px;
+      color: #333;
+      padding: 8px 12px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+    }
+    
+    .control-button.active {
+      background-color: #4285f4;
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -130,8 +156,8 @@
       shadow-intensity="1"
       auto-rotate
       interaction-prompt="none"
-      camera-orbit="0deg 75deg 105%"
-      auto-activate-ar>
+      camera-orbit="0deg 75deg 105%">
+      <!-- 删除了auto-activate-ar属性，确保AR需要手动点击启动 -->
 
       <button class="ar-button" id="manualArButton" slot="ar-button">
         进入AR模式
@@ -139,6 +165,12 @@
     </model-viewer>
     
     <button class="back-button" id="backBtn">返回</button>
+    
+    <!-- 添加控制按钮组 -->
+    <div class="control-buttons">
+      <button class="control-button" id="toggleTextureBtn">仅显示纹理</button>
+      <button class="control-button" id="resetViewBtn">重置视图</button>
+    </div>
   </div>
   
   <script>
@@ -149,6 +181,11 @@
       const arNotice = document.getElementById('arNotice');
       const closeNotice = document.getElementById('closeNotice');
       const manualArButton = document.getElementById('manualArButton');
+      const toggleTextureBtn = document.getElementById('toggleTextureBtn');
+      const resetViewBtn = document.getElementById('resetViewBtn');
+      
+      // 材质设置变量
+      let showOnlyBaseColor = false;
       
       // 获取URL参数中的模型路径
       const urlParams = new URLSearchParams(window.location.search);
@@ -171,17 +208,10 @@
         if (!modelViewer.canActivateAR) {
           console.log('该设备不支持AR功能');
           arNotice.style.display = 'block';
-        } else {
-          // 自动启动AR - 方法1: 尝试使用JavaScript自动激活AR
-          setTimeout(() => {
-            try {
-              modelViewer.activateAR();
-            } catch (error) {
-              console.log('自动激活AR失败:', error);
-              // 如果自动激活失败，不显示错误，让用户手动点击按钮
-            }
-          }, 1000);
         }
+        
+        // 初始化材质设置
+        applyMaterialSettings();
       });
       
       // 模型加载错误处理
@@ -195,7 +225,7 @@
         console.log('AR状态:', event.detail.status);
       });
       
-      // 手动触发AR按钮 - 备用方案
+      // 手动触发AR按钮
       manualArButton.addEventListener('click', function() {
         if (modelViewer.canActivateAR) {
           modelViewer.activateAR();
@@ -203,6 +233,52 @@
           arNotice.style.display = 'block';
         }
       });
+      
+      // 切换纹理模式
+      toggleTextureBtn.addEventListener('click', function() {
+        showOnlyBaseColor = !showOnlyBaseColor;
+        
+        if (showOnlyBaseColor) {
+          this.textContent = '恢复PBR材质';
+          this.classList.add('active');
+        } else {
+          this.textContent = '仅显示纹理';
+          this.classList.remove('active');
+        }
+        
+        applyMaterialSettings();
+      });
+      
+      // 重置视图按钮
+      resetViewBtn.addEventListener('click', function() {
+        modelViewer.cameraOrbit = '0deg 75deg 105%';
+        modelViewer.cameraTarget = '0m 0m 0m';
+        modelViewer.fieldOfView = '30deg';
+      });
+      
+      // 应用材质设置
+      function applyMaterialSettings() {
+        if (!modelViewer.model) return;
+        
+        const materials = modelViewer.model.materials;
+        if (!materials || materials.length === 0) return;
+        
+        for (const material of materials) {
+          if (material.pbrMetallicRoughness) {
+            if (showOnlyBaseColor) {
+              // 将金属度设为0，粗糙度设为1，以展示纯baseColor
+              material.pbrMetallicRoughness.setMetallicFactor(0);
+              material.pbrMetallicRoughness.setRoughnessFactor(1);
+            } else {
+              // 恢复原始PBR参数
+              // 注意：因为我们不知道原始值，所以这里可能需要根据模型特性调整默认值
+              // 某些模型可能原始值就不是默认值
+              material.pbrMetallicRoughness.setMetallicFactor(0);
+              material.pbrMetallicRoughness.setRoughnessFactor(1);
+            }
+          }
+        }
+      }
       
       // 返回按钮
       backBtn.addEventListener('click', function() {
