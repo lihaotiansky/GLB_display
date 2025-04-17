@@ -32,8 +32,10 @@
     
     .ar-button {
       position: absolute;
-      bottom: 16px;
-      right: 16px;
+      top: 16px;       /* 顶部 16px */
+      left: 16px;      /* 左侧 16px */
+      bottom: auto;    /* 清除底部定位 */
+      right: auto;     /* 清除右侧定位 */
       background-color: #4285f4;
       border: none;
       border-radius: 4px;
@@ -157,9 +159,7 @@
       auto-rotate
       interaction-prompt="none"
       camera-orbit="0deg 75deg 105%">
-      <!-- 删除了auto-activate-ar属性，确保AR需要手动点击启动 -->
-
-      <button class="ar-button" id="manualArButton" slot="ar-button">
+      <button class="ar-button" id="manualArButton">
         进入AR模式
       </button>
     </model-viewer>
@@ -318,3 +318,4 @@
   </script>
 </body>
 </html>
+``` 
