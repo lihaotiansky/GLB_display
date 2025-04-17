@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=100%, initial-scale=1.0, user-scalable=no">
   <title>VOMMA 3D模型AR查看器</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
@@ -171,6 +171,12 @@
       <button class="control-button" id="toggleTextureBtn">仅显示纹理</button>
       <button class="control-button" id="resetViewBtn">重置视图</button>
     </div>
+
+    <!-- 新增：手动旋转按钮 -->
+    <div class="control-buttons" style="bottom:16px; top:auto;">
+      <button class="control-button" id="rotateLeftBtn">⟲</button>
+      <button class="control-button" id="rotateRightBtn">⟳</button>
+    </div>
   </div>
   
   <script>
@@ -183,9 +189,12 @@
       const manualArButton = document.getElementById('manualArButton');
       const toggleTextureBtn = document.getElementById('toggleTextureBtn');
       const resetViewBtn = document.getElementById('resetViewBtn');
+      const rotateLeftBtn = document.getElementById('rotateLeftBtn');
+      const rotateRightBtn = document.getElementById('rotateRightBtn');
       
       // 材质设置变量
       let showOnlyBaseColor = false;
+      let currentYaw = 0;
       
       // 获取URL参数中的模型路径
       const urlParams = new URLSearchParams(window.location.search);
@@ -208,6 +217,7 @@
         if (!modelViewer.canActivateAR) {
           console.log('该设备不支持AR功能');
           arNotice.style.display = 'block';
+          manualArButton.style.display = 'none';  // 隐藏AR按钮
         }
         
         // 初始化材质设置
@@ -255,6 +265,16 @@
         modelViewer.cameraTarget = '0m 0m 0m';
         modelViewer.fieldOfView = '30deg';
       });
+
+      // 手动旋转逻辑
+      rotateLeftBtn.addEventListener('click', () => {
+        currentYaw -= 15;
+        modelViewer.cameraOrbit = `${currentYaw}deg 75deg 105%`;
+      });
+      rotateRightBtn.addEventListener('click', () => {
+        currentYaw += 15;
+        modelViewer.cameraOrbit = `${currentYaw}deg 75deg 105%`;
+      });
       
       // 应用材质设置
       function applyMaterialSettings() {
@@ -292,13 +312,7 @@
       
       // 关闭通知
       closeNotice.addEventListener('click', function() {
-        arNotice.style.display = 'none';
-        // 可以选择自动返回
-        if (modelUrl) {
-          window.location.href = 'index.html?model=' + encodeURIComponent(modelUrl);
-        } else {
-          window.location.href = 'index.html';
-        }
+        arNotice.style.display = 'none';  // 仅隐藏提示，不跳转
       });
     });
   </script>
